@@ -68,7 +68,7 @@
   </div>
 
   <script>
-    const seed = 12345;
+    const seed = new Date().getTime();
     const random = mulberry32(seed);
 
     function mulberry32(a) {
