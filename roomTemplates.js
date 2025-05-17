@@ -21,7 +21,7 @@ const roomTemplates = [
     { filename: 'Isometric Pixel Art Dining Room.png', doors: { north: false, south: true, east: false, west: true } },
     { filename: 'Isometric Room with Aquariums.png', doors: { north: true, south: false, east: true, west: false } },
     { filename: 'Isometric Room with Red Carpet.png', doors: { north: true, south: true, east: false, west: false } },
-    { filename: 'Isometric Room with Security Cameras.png', doors: { north: false, south: true, east: true, west: true } },
+    { filename: 'Isometric Room with Security Cameras.png', doors: { north: false, south: false, east: false, west: true } },
     { filename: 'Pixel Art Bathroom Setup.png', doors: { north: false, south: false, east: false, west: true } },
     { filename: 'Pixel Art Church Interior.png', doors: { north: true, south: false, east: true, west: false } },
     { filename: 'Pixel Art Cozy Library Interior.png', doors: { north: true, south: true, east: false, west: false } },
