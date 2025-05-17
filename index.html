@@ -31,11 +31,12 @@
       position: fixed;
       top: 50px;
       left: 10px;
-      width: 300px;
-      max-height: 90vh;
+      width: 90vw;
+      max-width: 300px;
+      max-height: 80vh;
       overflow-y: auto;
       display: block;
-      background: rgba(0, 0, 0, 0.8);
+      background: rgba(0, 0, 0, 0.85);
       padding: 8px;
       border: 1px solid #444;
       z-index: 999;
@@ -151,6 +152,15 @@
       #room {
         width: 260px;
         height: 260px;
+      }
+
+      .mapCell {
+        font-size: 8px;
+        padding: 4px;
+      }
+
+      #mapContainer {
+        padding: 6px;
       }
     }
   </style>
