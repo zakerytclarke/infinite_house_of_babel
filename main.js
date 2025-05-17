@@ -19,7 +19,7 @@ function getKey(x, y) {
 }
 
 function getValidRooms(x, y, world, roomTemplates) {
-  return roomTemplates.filter((room) => {
+  return roomTemplates.slice(1).filter((room) => {
     for (const { dx, dy } of [
       { dx: 0, dy: -1 },
       { dx: 0, dy: 1 },
