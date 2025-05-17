@@ -2,40 +2,131 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
   <title>The Infinite House of Babel</title>
   <style>
-    body {
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #111;
+      color: white;
+      font-family: sans-serif;
+      height: 100%;
+      overflow: hidden;
+      touch-action: none;
+    }
+
+    #mapToggle {
+      position: fixed;
+      left: 10px;
+      top: 10px;
+      background: rgba(255, 255, 255, 0.8);
+      color: black;
+      padding: 4px 8px;
+      cursor: pointer;
+      z-index: 1000;
+    }
+
+    #mapContainer {
+      position: fixed;
+      top: 50px;
+      left: 10px;
+      width: 300px;
+      max-height: 90vh;
+      overflow-y: auto;
+      display: block;
+      background: rgba(0, 0, 0, 0.8);
+      padding: 8px;
+      border: 1px solid #444;
+      z-index: 999;
+    }
+
+    #mapGrid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 4px;
+      text-align: center;
+    }
+
+    .mapCell {
+      background: #222;
+      border: 1px solid #444;
+      padding: 5px;
+      font-size: 10px;
+      word-break: break-word;
+    }
+
+    .current {
+      background: #555;
+      font-weight: bold;
+    }
+
+    #gameArea {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      width: 100%;
+      max-width: 100vw;
+    }
+
+    #roomWrapper {
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      height: 100vh;
-      background: #111;
-      color: white;
-      font-family: sans-serif;
     }
+
+    #roomTitle {
+      margin-bottom: 10px;
+      font-size: 1.2rem;
+      text-align: center;
+    }
+
     #room {
       position: relative;
-    }
-    #room img {
       width: 300px;
       height: 300px;
+    }
+
+    #room img {
+      width: 100%;
+      height: 100%;
       object-fit: cover;
     }
+
     .btn {
       position: absolute;
       background: rgba(255, 255, 255, 0.8);
       border: none;
       padding: 5px 10px;
       cursor: pointer;
+      font-size: 12px;
     }
-    #north { top: 10px; right: 10px; }
-    #south { bottom: 10px; left: 10px; }
-    #east { bottom: 10px; right: 10px; }
-    #west { top: 10px; left: 10px; }
+
+    #north {
+      top: 0;
+      right: 0;
+    }
+
+    #south {
+      bottom: 0;
+      left: 0;
+    }
+
+    #east {
+      bottom: 0;
+      right: 0;
+    }
+
+    #west {
+      top: 0;
+      left: 0;
+    }
+
     #compass {
-      position: absolute;
+      position: fixed;
       top: 10px;
       right: 10px;
       width: 40px;
@@ -44,7 +135,9 @@
       align-items: center;
       justify-content: center;
       transform-origin: center center;
+      z-index: 1000;
     }
+
     #compass:after {
       content: '';
       display: block;
@@ -53,18 +146,35 @@
       background-color: gold;
       clip-path: polygon(50% 0%, 100% 100%, 50% 80%, 0% 100%);
     }
+
+    @media (max-width: 400px) {
+      #room {
+        width: 260px;
+        height: 260px;
+      }
+    }
   </style>
   <script src="roomTemplates.js"></script>
 </head>
 <body>
-  <h1>The Infinite House of Babel</h1>
+  <button id="mapToggle">Toggle Map</button>
+  <div id="mapContainer">
+    <div id="mapGrid"></div>
+  </div>
+
   <div id="compass" title="Click to copy seed"></div>
-  <div id="room">
-    <img id="roomImage" src="" alt="Room" style="transform: scaleX(1);" />
-    <button class="btn" id="north">North</button>
-    <button class="btn" id="south">South</button>
-    <button class="btn" id="east">East</button>
-    <button class="btn" id="west">West</button>
+
+  <div id="gameArea">
+    <div id="roomWrapper">
+      <h1 id="roomTitle">The Infinite House of Babel</h1>
+      <div id="room">
+        <img id="roomImage" src="" alt="Room" style="transform: scaleX(1);" />
+        <button class="btn" id="north">North</button>
+        <button class="btn" id="south">South</button>
+        <button class="btn" id="east">East</button>
+        <button class="btn" id="west">West</button>
+      </div>
+    </div>
   </div>
 
   <script src="main.js"></script>

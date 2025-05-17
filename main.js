@@ -1,4 +1,4 @@
-const seed = 12345;
+const seed = new Date().getTime();
 const random = mulberry32(seed);
 
 function mulberry32(a) {
@@ -19,53 +19,49 @@ function getKey(x, y) {
 }
 
 function getValidRooms(x, y, world, roomTemplates) {
-    return roomTemplates.filter((room) => {
-      // 1. Must not match any adjacent room by filename
-      for (const { dx, dy } of [
-        { dx: 0, dy: -1 },
-        { dx: 0, dy: 1 },
-        { dx: 1, dy: 0 },
-        { dx: -1, dy: 0 }
-      ]) {
-        const neighbor = world.get(getKey(x + dx, y + dy));
-        if (neighbor && neighbor.filename === room.filename) {
-          return false;
-        }
+  return roomTemplates.filter((room) => {
+    for (const { dx, dy } of [
+      { dx: 0, dy: -1 },
+      { dx: 0, dy: 1 },
+      { dx: 1, dy: 0 },
+      { dx: -1, dy: 0 }
+    ]) {
+      const neighbor = world.get(getKey(x + dx, y + dy));
+      if (neighbor && neighbor.filename === room.filename) {
+        return false;
       }
-  
-      // 2. Door compatibility check with existing neighbors
-      const neighbors = [
-        { dx: 0, dy: -1, dir: 'north', opp: 'south' },
-        { dx: 0, dy: 1, dir: 'south', opp: 'north' },
-        { dx: 1, dy: 0, dir: 'east', opp: 'west' },
-        { dx: -1, dy: 0, dir: 'west', opp: 'east' }
-      ];
-  
-      let unseenNeighbors = [];
-  
-      for (const { dx, dy, dir, opp } of neighbors) {
-        const neighbor = world.get(getKey(x + dx, y + dy));
-        if (neighbor) {
-          const neighborHasDoor = neighbor.doors[opp];
-          const roomHasDoor = room.doors[dir];
-  
-          if (neighborHasDoor && !roomHasDoor) return false;
-          if (!neighborHasDoor && roomHasDoor) return false;
-        } else {
-          unseenNeighbors.push({ dx, dy, dir });
-        }
+    }
+
+    const neighbors = [
+      { dx: 0, dy: -1, dir: 'north', opp: 'south' },
+      { dx: 0, dy: 1, dir: 'south', opp: 'north' },
+      { dx: 1, dy: 0, dir: 'east', opp: 'west' },
+      { dx: -1, dy: 0, dir: 'west', opp: 'east' }
+    ];
+
+    let unseenNeighbors = [];
+
+    for (const { dx, dy, dir, opp } of neighbors) {
+      const neighbor = world.get(getKey(x + dx, y + dy));
+      if (neighbor) {
+        const neighborHasDoor = neighbor.doors[opp];
+        const roomHasDoor = room.doors[dir];
+
+        if (neighborHasDoor && !roomHasDoor) return false;
+        if (!neighborHasDoor && roomHasDoor) return false;
+      } else {
+        unseenNeighbors.push({ dx, dy, dir });
       }
-  
-      // 3. If there is exactly one unseen neighbor, the room must have a door toward it
-      if (unseenNeighbors.length === 1) {
-        const only = unseenNeighbors[0];
-        if (!room.doors[only.dir]) return false;
-      }
-  
-      return true;
-    }).map(room => ({ ...room })); // clone only, preserve id
-  }
-  
+    }
+
+    if (unseenNeighbors.length === 1) {
+      const only = unseenNeighbors[0];
+      if (!room.doors[only.dir]) return false;
+    }
+
+    return true;
+  }).map(room => ({ ...room }));
+}
 
 function applyRoomWeights(x, y, validRooms) {
   return validRooms.map(room => {
@@ -84,41 +80,40 @@ function applyRoomWeights(x, y, validRooms) {
 }
 
 function weightedRandomChoice(items, rng) {
-    const totalWeight = items.reduce((sum, item) => sum + item.weight, 0);
-    const threshold = rng() * totalWeight;
-    let running = 0;
-    for (const item of items) {
-      running += item.weight;
-      if (running >= threshold) {
-        return item;
-      }
+  const totalWeight = items.reduce((sum, item) => sum + item.weight, 0);
+  const threshold = rng() * totalWeight;
+  let running = 0;
+  for (const item of items) {
+    running += item.weight;
+    if (running >= threshold) {
+      return item;
     }
-    return items[items.length - 1]; // fallback
   }
-  
-  function matchRoom(x, y) {
-    const validRooms = getValidRooms(x, y, world, roomTemplates);
-    if (validRooms.length === 0) {
-      const neighbors = [
-        { dx: 0, dy: -1, dir: 'north', opp: 'south' },
-        { dx: 0, dy: 1, dir: 'south', opp: 'north' },
-        { dx: 1, dy: 0, dir: 'east', opp: 'west' },
-        { dx: -1, dy: 0, dir: 'west', opp: 'east' }
-      ];
-      const required = neighbors
-        .filter(({ dx, dy, opp }) => {
-          const neighbor = world.get(getKey(x + dx, y + dy));
-          return neighbor && neighbor.doors[opp];
-        })
-        .map(n => n.dir).join(', ');
-      alert(`No matching rooms found. Required doors (from neighbors): ${required}`);
-      return null;
-    }
-  
-    const weightedRooms = applyRoomWeights(x, y, validRooms);
-    return weightedRandomChoice(weightedRooms, random);
+  return items[items.length - 1];
+}
+
+function matchRoom(x, y) {
+  const validRooms = getValidRooms(x, y, world, roomTemplates);
+  if (validRooms.length === 0) {
+    const neighbors = [
+      { dx: 0, dy: -1, dir: 'north', opp: 'south' },
+      { dx: 0, dy: 1, dir: 'south', opp: 'north' },
+      { dx: 1, dy: 0, dir: 'east', opp: 'west' },
+      { dx: -1, dy: 0, dir: 'west', opp: 'east' }
+    ];
+    const required = neighbors
+      .filter(({ dx, dy, opp }) => {
+        const neighbor = world.get(getKey(x + dx, y + dy));
+        return neighbor && neighbor.doors[opp];
+      })
+      .map(n => n.dir).join(', ');
+    alert(`No matching rooms found. Required doors (from neighbors): ${required}`);
+    return null;
   }
-  
+
+  const weightedRooms = applyRoomWeights(x, y, validRooms);
+  return weightedRandomChoice(weightedRooms, random);
+}
 
 function generateRoom(x, y, fromDirection) {
   const key = getKey(x, y);
@@ -133,7 +128,7 @@ function generateRoom(x, y, fromDirection) {
       ...baseRoom,
       x,
       y,
-      uid: `${baseRoom.id}-${x}-${y}` // unique per coordinate
+      uid: `${baseRoom.id}-${x}-${y}`
     };
     world.set(key, roomInstance);
   }
@@ -142,13 +137,12 @@ function generateRoom(x, y, fromDirection) {
 function updateCompass() {
   const dx = 0 - currentPosition.x;
   const dy = 0 - currentPosition.y;
-  const angle = Math.atan2(dy, dx) * (180 / Math.PI);
-  if(dx==0 && dy==0){
+  let angle = Math.atan2(dy, dx) * (180 / Math.PI);
+  if (dx === 0 && dy === 0) {
     angle = 0 - 90 - 45;
   }
   const compass = document.getElementById('compass');
-  compass.style.transform = `rotate(${angle + 90+45}deg)`;
-  
+  compass.style.transform = `rotate(${angle + 90 + 45}deg)`;
 }
 
 function renderRoom() {
@@ -167,6 +161,7 @@ function renderRoom() {
     });
     img.style.visibility = 'visible';
     updateCompass();
+    renderMap();
   };
   img.src = `rooms/${room.filename}`;
 }
@@ -182,6 +177,33 @@ function move(dir) {
   renderRoom();
 }
 
+function renderMap() {
+  const mapGrid = document.getElementById('mapGrid');
+  mapGrid.innerHTML = '';
+  const cx = currentPosition.x;
+  const cy = currentPosition.y;
+
+  for (let dy = -2; dy <= 2; dy++) {
+    for (let dx = -2; dx <= 2; dx++) {
+      const x = cx + dx;
+      const y = cy + dy;
+      const key = getKey(x, y);
+      const room = world.get(key);
+      const cell = document.createElement('div');
+      cell.className = 'mapCell';
+      if (x === cx && y === cy) cell.classList.add('current');
+      cell.textContent = room ? room.name : '?';
+      mapGrid.appendChild(cell);
+    }
+  }
+}
+
+document.getElementById('mapToggle').addEventListener('click', () => {
+  const container = document.getElementById('mapContainer');
+  container.style.display = container.style.display === 'none' ? 'block' : 'none';
+  renderMap();
+});
+
 document.getElementById('compass').addEventListener('click', () => {
   navigator.clipboard.writeText(seed.toString()).then(() => {
     console.log('Seed copied to clipboard:', seed);
@@ -192,6 +214,5 @@ document.getElementById('compass').addEventListener('click', () => {
   document.getElementById(dir).addEventListener('click', () => move(dir));
 });
 
-// Assumes roomTemplates is defined globally elsewhere
 world.set(getKey(0, 0), { ...roomTemplates[0], id: 0, x: 0, y: 0, uid: '0-0-0' });
 renderRoom();
