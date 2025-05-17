@@ -19,42 +19,53 @@ function getKey(x, y) {
 }
 
 function getValidRooms(x, y, world, roomTemplates) {
-  return roomTemplates.filter((room) => {
-    // 1. Must not match any adjacent room by filename
-    for (const { dx, dy } of [
-      { dx: 0, dy: -1 },
-      { dx: 0, dy: 1 },
-      { dx: 1, dy: 0 },
-      { dx: -1, dy: 0 }
-    ]) {
-      const neighbor = world.get(getKey(x + dx, y + dy));
-      if (neighbor && neighbor.filename === room.filename) {
-        return false;
+    return roomTemplates.filter((room) => {
+      // 1. Must not match any adjacent room by filename
+      for (const { dx, dy } of [
+        { dx: 0, dy: -1 },
+        { dx: 0, dy: 1 },
+        { dx: 1, dy: 0 },
+        { dx: -1, dy: 0 }
+      ]) {
+        const neighbor = world.get(getKey(x + dx, y + dy));
+        if (neighbor && neighbor.filename === room.filename) {
+          return false;
+        }
       }
-    }
-
-    // 2. Door compatibility check
-    const neighbors = [
-      { dx: 0, dy: -1, dir: 'north', opp: 'south' },
-      { dx: 0, dy: 1, dir: 'south', opp: 'north' },
-      { dx: 1, dy: 0, dir: 'east', opp: 'west' },
-      { dx: -1, dy: 0, dir: 'west', opp: 'east' }
-    ];
-
-    for (const { dx, dy, dir, opp } of neighbors) {
-      const neighbor = world.get(getKey(x + dx, y + dy));
-      if (neighbor) {
-        const neighborHasDoor = neighbor.doors[opp];
-        const roomHasDoor = room.doors[dir];
-
-        if (neighborHasDoor && !roomHasDoor) return false;
-        if (!neighborHasDoor && roomHasDoor) return false;
+  
+      // 2. Door compatibility check with existing neighbors
+      const neighbors = [
+        { dx: 0, dy: -1, dir: 'north', opp: 'south' },
+        { dx: 0, dy: 1, dir: 'south', opp: 'north' },
+        { dx: 1, dy: 0, dir: 'east', opp: 'west' },
+        { dx: -1, dy: 0, dir: 'west', opp: 'east' }
+      ];
+  
+      let unseenNeighbors = [];
+  
+      for (const { dx, dy, dir, opp } of neighbors) {
+        const neighbor = world.get(getKey(x + dx, y + dy));
+        if (neighbor) {
+          const neighborHasDoor = neighbor.doors[opp];
+          const roomHasDoor = room.doors[dir];
+  
+          if (neighborHasDoor && !roomHasDoor) return false;
+          if (!neighborHasDoor && roomHasDoor) return false;
+        } else {
+          unseenNeighbors.push({ dx, dy, dir });
+        }
       }
-    }
-
-    return true;
-  }).map(room => ({ ...room })); // clone only, preserve id
-}
+  
+      // 3. If there is exactly one unseen neighbor, the room must have a door toward it
+      if (unseenNeighbors.length === 1) {
+        const only = unseenNeighbors[0];
+        if (!room.doors[only.dir]) return false;
+      }
+  
+      return true;
+    }).map(room => ({ ...room })); // clone only, preserve id
+  }
+  
 
 function applyRoomWeights(x, y, validRooms) {
   return validRooms.map(room => {
@@ -67,33 +78,47 @@ function applyRoomWeights(x, y, validRooms) {
     if (y < 0 && room.doors.south) bias++;
 
     const baseWeight = room.doors.north + room.doors.south + room.doors.east + room.doors.west;
-    const weight = baseWeight + numDoors * 1 + bias * 1;
+    const weight = baseWeight + numDoors * 2 + bias * 4;
     return { ...room, weight };
   }).sort((a, b) => b.weight - a.weight);
 }
 
-function matchRoom(x, y) {
-  const validRooms = getValidRooms(x, y, world, roomTemplates);
-  if (validRooms.length === 0) {
-    const neighbors = [
-      { dx: 0, dy: -1, dir: 'north', opp: 'south' },
-      { dx: 0, dy: 1, dir: 'south', opp: 'north' },
-      { dx: 1, dy: 0, dir: 'east', opp: 'west' },
-      { dx: -1, dy: 0, dir: 'west', opp: 'east' }
-    ];
-    const required = neighbors
-      .filter(({ dx, dy, opp }) => {
-        const neighbor = world.get(getKey(x + dx, y + dy));
-        return neighbor && neighbor.doors[opp];
-      })
-      .map(n => n.dir).join(', ');
-    alert(`No matching rooms found. Required doors (from neighbors): ${required}`);
-    return null;
+function weightedRandomChoice(items, rng) {
+    const totalWeight = items.reduce((sum, item) => sum + item.weight, 0);
+    const threshold = rng() * totalWeight;
+    let running = 0;
+    for (const item of items) {
+      running += item.weight;
+      if (running >= threshold) {
+        return item;
+      }
+    }
+    return items[items.length - 1]; // fallback
   }
-
-  const weightedRooms = applyRoomWeights(x, y, validRooms);
-  return weightedRooms[0];
-}
+  
+  function matchRoom(x, y) {
+    const validRooms = getValidRooms(x, y, world, roomTemplates);
+    if (validRooms.length === 0) {
+      const neighbors = [
+        { dx: 0, dy: -1, dir: 'north', opp: 'south' },
+        { dx: 0, dy: 1, dir: 'south', opp: 'north' },
+        { dx: 1, dy: 0, dir: 'east', opp: 'west' },
+        { dx: -1, dy: 0, dir: 'west', opp: 'east' }
+      ];
+      const required = neighbors
+        .filter(({ dx, dy, opp }) => {
+          const neighbor = world.get(getKey(x + dx, y + dy));
+          return neighbor && neighbor.doors[opp];
+        })
+        .map(n => n.dir).join(', ');
+      alert(`No matching rooms found. Required doors (from neighbors): ${required}`);
+      return null;
+    }
+  
+    const weightedRooms = applyRoomWeights(x, y, validRooms);
+    return weightedRandomChoice(weightedRooms, random);
+  }
+  
 
 function generateRoom(x, y, fromDirection) {
   const key = getKey(x, y);
