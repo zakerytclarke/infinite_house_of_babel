@@ -34,11 +34,31 @@
     #south { bottom: 10px; left: 10px; }
     #east { bottom: 10px; right: 10px; }
     #west { top: 10px; left: 10px; }
+    #compass {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transform-origin: center center;
+    }
+    #compass:after {
+      content: '';
+      display: block;
+      width: 20px;
+      height: 20px;
+      background-color: gold;
+      clip-path: polygon(50% 0%, 100% 100%, 50% 80%, 0% 100%);
+    }
   </style>
   <script src="roomTemplates.js"></script>
 </head>
 <body>
   <h1>The Infinite House of Babel</h1>
+  <div id="compass" title="Click to copy seed"></div>
   <div id="room">
     <img id="roomImage" src="" alt="Room" style="transform: scaleX(1);" />
     <button class="btn" id="north">North</button>
@@ -48,7 +68,7 @@
   </div>
 
   <script>
-    const seed = 2;
+    const seed = 12345;
     const random = mulberry32(seed);
 
     function mulberry32(a) {
@@ -70,31 +90,66 @@
 
     function matchRoom(requiredDoors) {
       const matches = roomTemplates
-        .map((template, index) => ({ ...template, id: index }))
+        .map((template, index) => {
+          const doors = template.doors;
+          const id = index;
+          const numDoors = Object.values(doors).filter(Boolean).length;
+
+          const dx = currentPosition.x;
+          const dy = currentPosition.y;
+          let bias = 0;
+          if (dx > 0 && doors.west) bias++;
+          if (dx < 0 && doors.east) bias++;
+          if (dy > 0 && doors.north) bias++;
+          if (dy < 0 && doors.south) bias++;
+
+          const baseWeight = 1;
+          const weight = baseWeight + numDoors * 10 + bias * 20;
+
+          return { ...template, id, weight };
+        })
         .filter(r => Object.entries(requiredDoors).every(([dir, val]) => !val || r.doors[dir]));
-      return matches[Math.floor(random() * matches.length)];
+
+      const totalWeight = matches.reduce((sum, r) => sum + r.weight, 0);
+      let threshold = random() * totalWeight;
+      for (const r of matches) {
+        threshold -= r.weight;
+        if (threshold <= 0) return r;
+      }
+      return matches[matches.length - 1];
     }
 
     function generateRoom(x, y, fromDirection) {
-      const opposite = { north: 'south', south: 'north', east: 'west', west: 'east' };
-      const requiredDoors = { [opposite[fromDirection]]: true };
+  const opposite = { north: 'south', south: 'north', east: 'west', west: 'east' };
+  const requiredDoors = { [opposite[fromDirection]]: true };
 
-      const neighbors = [
-        { dir: 'north', dx: 0, dy: -1, opposite: 'south' },
-        { dir: 'south', dx: 0, dy: 1, opposite: 'north' },
-        { dir: 'east', dx: 1, dy: 0, opposite: 'west' },
-        { dir: 'west', dx: -1, dy: 0, opposite: 'east' }
-      ];
+  const key = getKey(x, y);
+  const isSecondRoom = world.size === 1;
 
-      for (const { dir, dx, dy, opposite } of neighbors) {
-        const neighbor = world.get(getKey(x + dx, y + dy));
-        if (neighbor && neighbor.doors[opposite]) {
-          requiredDoors[dir] = true;
-        }
-      }
+  const neighbors = [
+    { dir: 'north', dx: 0, dy: -1, opposite: 'south' },
+    { dir: 'south', dx: 0, dy: 1, opposite: 'north' },
+    { dir: 'east', dx: 1, dy: 0, opposite: 'west' },
+    { dir: 'west', dx: -1, dy: 0, opposite: 'east' }
+  ];
 
-      const room = matchRoom(requiredDoors);
+  for (const { dir, dx, dy, opposite } of neighbors) {
+    const neighbor = world.get(getKey(x + dx, y + dy));
+    if (neighbor && neighbor.doors[opposite]) {
+      requiredDoors[dir] = true;
+    }
+  }
+
+  const room = isSecondRoom ? { ...roomTemplates[1], id: 1 } : matchRoom(requiredDoors);
       world.set(getKey(x, y), room);
+    }
+
+    function updateCompass() {
+      const dx = 0 - currentPosition.x;
+      const dy = 0 - currentPosition.y;
+      const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+      const compass = document.getElementById('compass');
+      compass.style.transform = `rotate(${angle + 90}deg)`;
     }
 
     function renderRoom() {
@@ -105,11 +160,16 @@
         room = world.get(key);
       }
       const img = document.getElementById('roomImage');
+      img.style.visibility = 'hidden';
+      img.onload = () => {
+        img.style.transform = room.flipped ? 'scaleX(-1)' : 'scaleX(1)';
+        ['north', 'south', 'east', 'west'].forEach(dir => {
+          document.getElementById(dir).style.display = room.doors[dir] ? 'block' : 'none';
+        });
+        img.style.visibility = 'visible';
+        updateCompass();
+      };
       img.src = `rooms/${room.filename}`;
-      img.style.transform = room.flipped ? 'scaleX(-1)' : 'scaleX(1)';
-      ['north', 'south', 'east', 'west'].forEach(dir => {
-        document.getElementById(dir).style.display = room.doors[dir] ? 'block' : 'none';
-      });
     }
 
     function move(dir) {
@@ -121,6 +181,12 @@
         case 'west': currentPosition.x -= 1; break;
       }
       renderRoom();
+
+    document.getElementById('compass').addEventListener('click', () => {
+      navigator.clipboard.writeText(seed.toString()).then(() => {
+        console.log('Seed copied to clipboard:', seed);
+      });
+    });
     }
 
     ['north', 'south', 'east', 'west'].forEach(dir => {

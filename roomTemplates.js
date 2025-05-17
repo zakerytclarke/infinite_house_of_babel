@@ -1,5 +1,7 @@
 const roomTemplates = [
-  { filename: 'Elegant Isometric Room with Chandelier.png', doors: { north: true, south: false, east: false, west: false }, flipped:true },
+  { filename: 'front.png', doors: { north: true, south: false, east: false, west: false }},
+  { filename: 'hall.png', doors: { north: true, south: true, east: true, west: true } },
+  { filename: 'Elegant Isometric Room with Chandelier.png', doors: { north: true, south: true, east: true, west: false }, flipped:true },
   { filename: 'Astronomy Observatory in Pixel Art.png', doors: { north: true, south: true, east: true, west: false } },
     { filename: 'bathroom.png', doors: { north: true, south: false, east: false, west: false } },
     { filename: 'Boiler Room in Pixel Art.png', doors: { north: true, south: false, east: true, west: false } },
