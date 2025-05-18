@@ -1,4 +1,5 @@
 const seed = new Date().getTime();
+// const seed = 42;
 const random = mulberry32(seed);
 
 function mulberry32(a) {
@@ -18,50 +19,219 @@ function getKey(x, y) {
   return `${x},${y}`;
 }
 
-function getValidRooms(x, y, world, roomTemplates) {
-  return roomTemplates.slice(1).filter((room) => {
-    for (const { dx, dy } of [
-      { dx: 0, dy: -1 },
-      { dx: 0, dy: 1 },
-      { dx: 1, dy: 0 },
-      { dx: -1, dy: 0 }
-    ]) {
-      const neighbor = world.get(getKey(x + dx, y + dy));
-      if (neighbor && neighbor.filename === room.filename) {
-        return false;
+const coordinateConstraints = {
+    '1,-6':  { north: true, south: true, east: true,  west: true },
+    '2,-6':  { north: true, south: false, east: true, west: true },
+    '3,-6':  { north: true, south: true, east: true,  west: true },
+    '4,-6':  { north: true, south: false, east: true, west: true },
+    '5,-6':  { north: true, south: true, east: true,  west: true },
+    '6,-6':  { north: true, south: false, east: true, west: true },
+    '7,-6':  { north: true, south: true, east: true,  west: true },
+    '8,-6':  { north: true, south: true, east: true,  west: true },
+    '9,-6':  { north: true, south: true, east: true,  west: true },
+    '10,-6': { north: true, south: false, east: true, west: true },
+    '11,-6': { north: true, south: true, east: true,  west: true }
+  };
+  
+
+  function getValidRooms(x, y, world, roomTemplates) {
+    const key = getKey(x, y);
+    const specificConstraint = coordinateConstraints[key];
+  
+    return roomTemplates.slice(1).filter((room) => {
+      // 1. No repeat of adjacent room types
+      for (const { dx, dy } of [
+        { dx: 0, dy: -1 },
+        { dx: 0, dy: 1 },
+        { dx: 1, dy: 0 },
+        { dx: -1, dy: 0 },
+      ]) {
+        const neighbor = world.get(getKey(x + dx, y + dy));
+        if (neighbor && neighbor.filename === room.filename) {
+          return false;
+        }
+      }
+  
+      // 2. Ensure door compatibility
+      const neighbors = [
+        { dx: 0, dy: -1, dir: 'north', opp: 'south' },
+        { dx: 0, dy: 1, dir: 'south', opp: 'north' },
+        { dx: 1, dy: 0, dir: 'east', opp: 'west' },
+        { dx: -1, dy: 0, dir: 'west', opp: 'east' },
+      ];
+  
+      let unseenNeighbors = [];
+  
+      for (const { dx, dy, dir, opp } of neighbors) {
+        const neighbor = world.get(getKey(x + dx, y + dy));
+        if (neighbor) {
+          const neighborHasDoor = neighbor.doors[opp];
+          const roomHasDoor = room.doors[dir];
+  
+          if (neighborHasDoor && !roomHasDoor) return false;
+          if (!neighborHasDoor && roomHasDoor) return false;
+        } else {
+          unseenNeighbors.push({ dx, dy, dir });
+        }
+      }
+  
+      // 3. Ensure path to sole unseen neighbor
+      if (unseenNeighbors.length === 1) {
+        const only = unseenNeighbors[0];
+        if (!room.doors[only.dir]) return false;
+      }
+  
+      // 4. Enforce fixed door constraints
+      if (specificConstraint) {
+        for (const dir of ['north', 'south', 'east', 'west']) {
+          if (room.doors[dir] !== specificConstraint[dir]) return false;
+        }
+      }
+  
+      // 5. Prevent creatind dead-end paths for neighbors
+      const blockingDirs = getBlockingDirectionsIfRoomPlaced(x, y, room, world);
+      console.log("blocking")
+      console.log(blockingDirs);
+      if (blockingDirs.length > 0) {
+        for (const dir of blockingDirs) {
+          if (!room.doors[dir]) return false;
+        }
+      }
+  
+      return true;
+    }).map(room => ({ ...room }));
+  }
+  
+  function floodFill({ 
+    startX, 
+    startY, 
+    world, 
+    maxDepth = 5,
+    shouldInclude = () => true,
+    shouldContinue = () => true
+  }) {
+    const visited = new Set();
+  
+    function recurse(x, y, depth) {
+      const key = getKey(x, y);
+      const room = world.get(key);
+      if (!room || visited.has(key) || depth > maxDepth) return;
+      if (!shouldInclude(x, y, room)) return;
+  
+      visited.add(key);
+  
+      if (!shouldContinue(x, y, room, depth)) return;
+  
+      const dirs = {
+        north: [0, -1],
+        south: [0, 1],
+        east: [1, 0],
+        west: [-1, 0]
+      };
+  
+      for (const dir in dirs) {
+        if (!room.doors[dir]) continue;
+        const [dx, dy] = dirs[dir];
+        const nx = x + dx;
+        const ny = y + dy;
+        const neighbor = world.get(getKey(nx, ny));
+        const opp = { north: 'south', south: 'north', east: 'west', west: 'east' }[dir];
+        if (neighbor && neighbor.doors[opp]) {
+          recurse(nx, ny, depth + 1);
+        }
       }
     }
-
-    const neighbors = [
+  
+    recurse(startX, startY, 0);
+    return visited;
+  }
+  
+  function getBlockingDirectionsIfRoomPlaced(x, y, room, world) {
+    const testWorld = new Map(world);
+    testWorld.set(getKey(x, y), room);
+  
+    const neighborOffsets = [
       { dx: 0, dy: -1, dir: 'north', opp: 'south' },
       { dx: 0, dy: 1, dir: 'south', opp: 'north' },
       { dx: 1, dy: 0, dir: 'east', opp: 'west' },
       { dx: -1, dy: 0, dir: 'west', opp: 'east' }
     ];
-
-    let unseenNeighbors = [];
-
-    for (const { dx, dy, dir, opp } of neighbors) {
-      const neighbor = world.get(getKey(x + dx, y + dy));
-      if (neighbor) {
-        const neighborHasDoor = neighbor.doors[opp];
-        const roomHasDoor = room.doors[dir];
-
-        if (neighborHasDoor && !roomHasDoor) return false;
-        if (!neighborHasDoor && roomHasDoor) return false;
-      } else {
-        unseenNeighbors.push({ dx, dy, dir });
+  
+    const blockedDirs = [];
+  
+    for (const { dx, dy, dir, opp } of neighborOffsets) {
+      const nx = x + dx;
+      const ny = y + dy;
+      const neighbor = world.get(getKey(nx, ny));
+  
+      if (
+        neighbor &&
+        neighbor.doors[opp] &&
+        room.doors[dir]
+      ) {
+        const visited = floodFill({
+          startX: nx,
+          startY: ny,
+          world: testWorld,
+          maxDepth: 5,
+          shouldInclude: (x2, y2) => getKey(x2, y2) !== getKey(x, y),
+          shouldContinue: () => true
+        });
+  
+        if (visited.size <= 1) {
+          blockedDirs.push(dir);
+        }
       }
     }
+  
+    return blockedDirs;
+  }
+  
+  
+// function getValidRooms(x, y, world, roomTemplates) {
+//   return roomTemplates.slice(1).filter((room) => {
+//     for (const { dx, dy } of [
+//       { dx: 0, dy: -1 },
+//       { dx: 0, dy: 1 },
+//       { dx: 1, dy: 0 },
+//       { dx: -1, dy: 0 }
+//     ]) {
+//       const neighbor = world.get(getKey(x + dx, y + dy));
+//       if (neighbor && neighbor.filename === room.filename) {
+//         return false;
+//       }
+//     }
 
-    if (unseenNeighbors.length === 1) {
-      const only = unseenNeighbors[0];
-      if (!room.doors[only.dir]) return false;
-    }
+//     const neighbors = [
+//       { dx: 0, dy: -1, dir: 'north', opp: 'south' },
+//       { dx: 0, dy: 1, dir: 'south', opp: 'north' },
+//       { dx: 1, dy: 0, dir: 'east', opp: 'west' },
+//       { dx: -1, dy: 0, dir: 'west', opp: 'east' }
+//     ];
 
-    return true;
-  }).map(room => ({ ...room }));
-}
+//     let unseenNeighbors = [];
+
+//     for (const { dx, dy, dir, opp } of neighbors) {
+//       const neighbor = world.get(getKey(x + dx, y + dy));
+//       if (neighbor) {
+//         const neighborHasDoor = neighbor.doors[opp];
+//         const roomHasDoor = room.doors[dir];
+
+//         if (neighborHasDoor && !roomHasDoor) return false;
+//         if (!neighborHasDoor && roomHasDoor) return false;
+//       } else {
+//         unseenNeighbors.push({ dx, dy, dir });
+//       }
+//     }
+
+//     if (unseenNeighbors.length === 1) {
+//       const only = unseenNeighbors[0];
+//       if (!room.doors[only.dir]) return false;
+//     }
+
+//     return true;
+//   }).map(room => ({ ...room }));
+// }
 
 function applyRoomWeights(x, y, validRooms) {
   return validRooms.map(room => {
@@ -74,7 +244,9 @@ function applyRoomWeights(x, y, validRooms) {
     if (y < 0 && room.doors.south) bias++;
 
     const baseWeight = room.doors.north + room.doors.south + room.doors.east + room.doors.west;
+    // const weight = baseWeight + numDoors * Math.pow(10, numDoors) + bias * 4;
     const weight = baseWeight + numDoors * 2 + bias * 4;
+    console.log(room.name, numDoors, weight)
     return { ...room, weight };
   }).sort((a, b) => b.weight - a.weight);
 }
@@ -177,26 +349,48 @@ function move(dir) {
   renderRoom();
 }
 
-function renderMap() {
-  const mapGrid = document.getElementById('mapGrid');
-  mapGrid.innerHTML = '';
-  const cx = currentPosition.x;
-  const cy = currentPosition.y;
-
-  for (let dy = -2; dy <= 2; dy++) {
-    for (let dx = -2; dx <= 2; dx++) {
-      const x = cx + dx;
-      const y = cy + dy;
-      const key = getKey(x, y);
-      const room = world.get(key);
-      const cell = document.createElement('div');
-      cell.className = 'mapCell';
-      if (x === cx && y === cy) cell.classList.add('current');
-      cell.textContent = room ? room.name : '?';
-      mapGrid.appendChild(cell);
+function renderMap(size = 2) {
+    const mapGrid = document.getElementById('mapGrid');
+    mapGrid.innerHTML = '';
+    mapGrid.style.gridTemplateColumns = `repeat(${size * 2 + 1}, 1fr)`; // Dynamically set columns
+  
+    const cx = currentPosition.x;
+    const cy = currentPosition.y;
+  
+    for (let dy = -size; dy <= size; dy++) {
+      for (let dx = -size; dx <= size; dx++) {
+        const x = cx + dx;
+        const y = cy + dy;
+        const key = getKey(x, y);
+        const room = world.get(key);
+        const cell = document.createElement('div');
+        cell.className = 'mapCell';
+  
+        if (x === cx && y === cy) {
+          cell.classList.add('current');
+        }
+  
+        if (room) {
+          if (room.doors.north) cell.classList.add('mapCellNoNorth');
+          if (room.doors.south) cell.classList.add('mapCellNoSouth');
+          if (room.doors.east)  cell.classList.add('mapCellNoEast');
+          if (room.doors.west)  cell.classList.add('mapCellNoWest');
+          cell.textContent = room.name;
+        } else {
+          cell.textContent = '?';
+          cell.classList.add('mapCellNoNorth');
+          cell.classList.add('mapCellNoSouth');
+          cell.classList.add('mapCellNoEast');
+          cell.classList.add('mapCellNoWest');
+        }
+  
+        mapGrid.appendChild(cell);
+      }
     }
   }
-}
+  
+  
+  
 
 document.getElementById('mapToggle').addEventListener('click', () => {
   const container = document.getElementById('mapContainer');
