@@ -1,5 +1,5 @@
 //const seed = new Date().getTime();
-const seed = 42;
+const seed = 123456;
 const random = mulberry32(seed);
 
 function mulberry32(a) {
