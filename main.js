@@ -1,5 +1,5 @@
-const seed = new Date().getTime();
-// const seed = 42;
+// const seed = new Date().getTime();
+const seed = 123456;
 const random = mulberry32(seed);
 
 function mulberry32(a) {
@@ -12,6 +12,7 @@ function mulberry32(a) {
 }
 
 const world = new Map();
+const inventory = [];
 const currentPosition = { x: 0, y: 0 };
 let lastDirection = 'north';
 
@@ -90,8 +91,7 @@ const coordinateConstraints = {
   
       // 5. Prevent creatind dead-end paths for neighbors
       const blockingDirs = getBlockingDirectionsIfRoomPlaced(x, y, room, world);
-      console.log("blocking")
-      console.log(blockingDirs);
+
       if (blockingDirs.length > 0) {
         for (const dir of blockingDirs) {
           if (!room.doors[dir]) return false;
@@ -188,50 +188,6 @@ const coordinateConstraints = {
   }
   
   
-// function getValidRooms(x, y, world, roomTemplates) {
-//   return roomTemplates.slice(1).filter((room) => {
-//     for (const { dx, dy } of [
-//       { dx: 0, dy: -1 },
-//       { dx: 0, dy: 1 },
-//       { dx: 1, dy: 0 },
-//       { dx: -1, dy: 0 }
-//     ]) {
-//       const neighbor = world.get(getKey(x + dx, y + dy));
-//       if (neighbor && neighbor.filename === room.filename) {
-//         return false;
-//       }
-//     }
-
-//     const neighbors = [
-//       { dx: 0, dy: -1, dir: 'north', opp: 'south' },
-//       { dx: 0, dy: 1, dir: 'south', opp: 'north' },
-//       { dx: 1, dy: 0, dir: 'east', opp: 'west' },
-//       { dx: -1, dy: 0, dir: 'west', opp: 'east' }
-//     ];
-
-//     let unseenNeighbors = [];
-
-//     for (const { dx, dy, dir, opp } of neighbors) {
-//       const neighbor = world.get(getKey(x + dx, y + dy));
-//       if (neighbor) {
-//         const neighborHasDoor = neighbor.doors[opp];
-//         const roomHasDoor = room.doors[dir];
-
-//         if (neighborHasDoor && !roomHasDoor) return false;
-//         if (!neighborHasDoor && roomHasDoor) return false;
-//       } else {
-//         unseenNeighbors.push({ dx, dy, dir });
-//       }
-//     }
-
-//     if (unseenNeighbors.length === 1) {
-//       const only = unseenNeighbors[0];
-//       if (!room.doors[only.dir]) return false;
-//     }
-
-//     return true;
-//   }).map(room => ({ ...room }));
-// }
 
 function applyRoomWeights(x, y, validRooms) {
   return validRooms.map(room => {
@@ -246,7 +202,6 @@ function applyRoomWeights(x, y, validRooms) {
     const baseWeight = room.doors.north + room.doors.south + room.doors.east + room.doors.west;
     // const weight = baseWeight + numDoors * Math.pow(10, numDoors) + bias * 4;
     const weight = baseWeight + numDoors * 2 + bias * 4;
-    console.log(room.name, numDoors, weight)
     return { ...room, weight };
   }).sort((a, b) => b.weight - a.weight);
 }
@@ -287,6 +242,24 @@ function matchRoom(x, y) {
   return weightedRandomChoice(weightedRooms, random);
 }
 
+function deepClonePreserveFunctions(obj) {
+  if (obj === null || typeof obj !== 'object') return obj;
+
+  if (Array.isArray(obj)) {
+    return obj.map(deepClonePreserveFunctions);
+  }
+
+  const copy = {};
+  for (const key in obj) {
+    const val = obj[key];
+    copy[key] =
+      typeof val === 'object' && val !== null
+        ? deepClonePreserveFunctions(val)
+        : val;
+  }
+  return copy;
+}
+
 function generateRoom(x, y, fromDirection) {
   const key = getKey(x, y);
   const isSecondRoom = world.size === 1;
@@ -297,14 +270,21 @@ function generateRoom(x, y, fromDirection) {
 
   if (baseRoom) {
     const roomInstance = {
-      ...baseRoom,
+      ...deepClonePreserveFunctions(baseRoom),
       x,
       y,
       uid: `${baseRoom.id}-${x}-${y}`
     };
+
+    if(random()<0.05){//Lock 5% of rooms
+      baseRoom.locked=True;
+    }
+
+
     world.set(key, roomInstance);
   }
 }
+
 
 function updateCompass() {
   const dx = 0 - currentPosition.x;
@@ -329,17 +309,74 @@ function renderRoom() {
   img.onload = () => {
     img.style.transform = room.flipped ? 'scaleX(-1)' : 'scaleX(1)';
     ['north', 'south', 'east', 'west'].forEach(dir => {
+      let text = dir;
+      let tempRoom = null;
+      switch (dir) {
+        case 'north': tempRoom = world.get(getKey(currentPosition.x, currentPosition.y-1)); break;
+        case 'south': tempRoom = world.get(getKey(currentPosition.x, currentPosition.y+1)); break;
+        case 'east': tempRoom = world.get(getKey(currentPosition.x+1, currentPosition.y)); break;
+        case 'west': tempRoom = world.get(getKey(currentPosition.x-1, currentPosition.y)); break;
+      }
+      
+      if(tempRoom && tempRoom.locked){
+        text+=" 🔒";
+      }
       document.getElementById(dir).style.display = room.doors[dir] ? 'block' : 'none';
+      document.getElementById(dir).innerHTML = text;
     });
     img.style.visibility = 'visible';
     updateCompass();
     renderMap();
   };
-  img.src = `rooms/${room.filename}`;
+  let filename = room.filename;
+  if (typeof filename === 'function') {
+    filename = filename(room);
+  }
+  img.src = `rooms/${filename}`;
+  renderMap();
 }
 
 function move(dir) {
   lastDirection = dir;
+
+  let tempRoom = null;
+  // Get the room we are moving in to 
+  let newX = currentPosition.x;
+  let newY = currentPosition.y;
+
+  switch (dir) {
+    case 'north': newY-=1; break;
+    case 'south': newY+=1; break;
+    case 'east': newX+=1; break;
+    case 'west': newX-=1; break;
+  }
+  
+  tempRoom = world.get(getKey(newX, newY))
+
+  if(!tempRoom){
+    const key = getKey(newX, newY);
+    generateRoom(newX, newY, lastDirection);
+    tempRoom = world.get(key);
+  }
+  console.log(tempRoom.locked)
+  if(tempRoom.locked){ // Room is locked, check if we have a key
+    let hasKey = null;
+    for (let i = 0; i < inventory.length; i++) {
+      if (inventory[i].name == "key") {
+        inventory.splice(i, 1); // remove it from inventory
+        tempRoom.locked=false;
+        hasKey = true;
+        break;
+      }
+    }
+    if(!hasKey){
+      renderRoom();
+      return;
+    }
+
+  }
+  
+  //Make the actual movement
   switch (dir) {
     case 'north': currentPosition.y -= 1; break;
     case 'south': currentPosition.y += 1; break;
@@ -349,7 +386,16 @@ function move(dir) {
   renderRoom();
 }
 
-function renderMap(size = 2) {
+function renderMap(size = 4) {
+    const inventoryDiv = document.getElementById("inventory");
+    inventoryDiv.innerHTML = "";
+    inventoryDiv.innerHTML += inventory.map(function(obj){
+      if(obj.name=="key"){
+        return "🔑"
+      }
+      return "";
+    }).join("");
+
     const mapGrid = document.getElementById('mapGrid');
     mapGrid.innerHTML = '';
     mapGrid.style.gridTemplateColumns = `repeat(${size * 2 + 1}, 1fr)`; // Dynamically set columns
@@ -410,3 +456,48 @@ document.getElementById('compass').addEventListener('click', () => {
 
 world.set(getKey(0, 0), { ...roomTemplates[0], id: 0, x: 0, y: 0, uid: '0-0-0' });
 renderRoom();
+
+const roomImage = document.getElementById('roomImage');
+
+// This should point to the current room object being rendered
+let currentRoom = null; // Make sure you assign this when loading a room
+
+roomImage.addEventListener('click', function (e) {
+  const rect = roomImage.getBoundingClientRect();
+  const x = ((e.clientX - rect.left) / rect.width);
+  const y = ((e.clientY - rect.top) / rect.height);
+
+  handleRoomImageClick(x, y);
+});
+
+function handleRoomImageClick(xPercent, yPercent) {
+  const x = currentPosition.x;
+  const y = currentPosition.y;
+  console.log(xPercent, yPercent);
+  
+  const currentRoom = world.get(getKey(x, y));
+  if (!currentRoom || !currentRoom.objects) return;
+  
+  for (let i = 0; i < currentRoom.objects.length; i++) {
+    const obj = currentRoom.objects[i];
+    const { x, y, w, h } = obj.location;
+  
+    if (
+      xPercent >= x &&
+      xPercent <= x + w &&
+      yPercent >= y &&
+      yPercent <= y + h
+    ) {
+      if (obj.fn && typeof obj.fn === 'function') {
+        obj.fn();
+      }
+  
+      inventory.push(obj);
+      currentRoom.objects.splice(i, 1); // Remove from room
+      console.log(inventory);
+      
+      renderRoom();
+      break;
+    }
+  }
+}
