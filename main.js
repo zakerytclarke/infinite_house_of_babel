@@ -13,6 +13,7 @@ function mulberry32(a) {
 
 const world = new Map();
 const inventory = [];
+let mapSize = 2;
 const currentPosition = { x: 0, y: 0 };
 let lastDirection = 'north';
 
@@ -20,24 +21,51 @@ function getKey(x, y) {
   return `${x},${y}`;
 }
 
-const coordinateConstraints = {
-    '1,-6':  { north: true, south: true, east: true,  west: true },
-    '2,-6':  { north: true, south: false, east: true, west: true },
-    '3,-6':  { north: true, south: true, east: true,  west: true },
-    '4,-6':  { north: true, south: false, east: true, west: true },
-    '5,-6':  { north: true, south: true, east: true,  west: true },
-    '6,-6':  { north: true, south: false, east: true, west: true },
-    '7,-6':  { north: true, south: true, east: true,  west: true },
-    '8,-6':  { north: true, south: true, east: true,  west: true },
-    '9,-6':  { north: true, south: true, east: true,  west: true },
-    '10,-6': { north: true, south: false, east: true, west: true },
-    '11,-6': { north: true, south: true, east: true,  west: true }
-  };
+
+function specificConstraint(x,y,room){
+  //Infinite Hallway
+  if(x==0&&y<-10){
+    if(room.doors.north&&room.doors.south&&!room.doors.east&&!room.doors.west&&room.name=="Infinite Hall"){
+      return true;
+    }else{
+      return false;
+    }
+  }
+if(x==1&&y==-10||x==0&&y==-10||x==-1&&y==-10){
+    if(room.doors.north&&room.doors.south&&!room.doors.west){
+      return true;
+    }else{
+      return false;
+    }
+  }
+  if(x==1&&y<-10){
+    if(!room.doors.west){
+      return true;
+    }else{
+      return false;
+    }
+  }
+  if(x==-1&&y<-10){
+    if(!room.doors.east){
+      return true;
+    }else{
+      return false;
+    }
+  }
+
+  //Rooms that shouldn't spawn on their own:
+  if(room.name=="Infinite Hall"){
+    return false;
+  }
+
+  return true;
+}
+
   
 
   function getValidRooms(x, y, world, roomTemplates) {
     const key = getKey(x, y);
-    const specificConstraint = coordinateConstraints[key];
+    // const specificConstraint = coordinateConstraints[key];
   
     return roomTemplates.slice(1).filter((room) => {
       // 1. No repeat of adjacent room types
@@ -83,10 +111,15 @@ const coordinateConstraints = {
       }
   
       // 4. Enforce fixed door constraints
-      if (specificConstraint) {
-        for (const dir of ['north', 'south', 'east', 'west']) {
-          if (room.doors[dir] !== specificConstraint[dir]) return false;
-        }
+      // if (specificConstraint) {
+      //   for (const dir of ['north', 'south', 'east', 'west']) {
+      //     if (room.doors[dir] !== specificConstraint[dir]) return false;
+      //   }
+      // }
+
+      // Evaluate specific constraints
+      if(specificConstraint(x,y,room)==false){
+        return false;
       }
   
       // 5. Prevent creatind dead-end paths for neighbors
@@ -277,7 +310,7 @@ function generateRoom(x, y, fromDirection) {
     };
 
     if(random()<0.05){//Lock 5% of rooms
-      baseRoom.locked=True;
+      baseRoom.locked=true;
     }
 
 
@@ -358,7 +391,7 @@ function move(dir) {
     generateRoom(newX, newY, lastDirection);
     tempRoom = world.get(key);
   }
-  console.log(tempRoom.locked)
+  
   if(tempRoom.locked){ // Room is locked, check if we have a key
     let hasKey = null;
     for (let i = 0; i < inventory.length; i++) {
@@ -386,7 +419,8 @@ function move(dir) {
   renderRoom();
 }
 
-function renderMap(size = 4) {
+function renderMap() {
+  let size = mapSize;
     const inventoryDiv = document.getElementById("inventory");
     inventoryDiv.innerHTML = "";
     inventoryDiv.innerHTML += inventory.map(function(obj){
@@ -421,7 +455,12 @@ function renderMap(size = 4) {
           if (room.doors.south) cell.classList.add('mapCellNoSouth');
           if (room.doors.east)  cell.classList.add('mapCellNoEast');
           if (room.doors.west)  cell.classList.add('mapCellNoWest');
-          cell.textContent = room.name;
+          if(room.locked){
+            cell.textContent = "🔒";
+          }else{
+            cell.textContent = room.name;
+          }
+          
         } else {
           cell.textContent = '?';
           cell.classList.add('mapCellNoNorth');
@@ -439,8 +478,21 @@ function renderMap(size = 4) {
   
 
 document.getElementById('mapToggle').addEventListener('click', () => {
+
   const container = document.getElementById('mapContainer');
-  container.style.display = container.style.display === 'none' ? 'block' : 'none';
+  if(mapSize==0){
+    container.style.display = 'block';
+    mapSize=2;
+  }else
+  if(mapSize==2){
+    container.style.display = 'block' ;
+    mapSize=5;
+  } 
+  else if(mapSize==5){
+    container.style.display = 'none' ;
+    mapSize=0;
+  }
+  // container.style.display = container.style.display === 'none' ? 'block' : 'none';
   renderMap();
 });
 
