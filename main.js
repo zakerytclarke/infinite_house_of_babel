@@ -22,205 +22,230 @@ function getKey(x, y) {
 }
 
 
-function specificConstraint(x,y,room){
+function specificConstraint(x, y, room) {
   //Infinite Hallway
-  if(x==0&&y<-10){
-    if(room.doors.north&&room.doors.south&&!room.doors.east&&!room.doors.west&&room.name=="Infinite Hall"){
+  if (x == 0 && y < -10) {
+    if (room.doors.north && room.doors.south && !room.doors.east && !room.doors.west && room.name == "Infinite Hall") {
       return true;
-    }else{
+    } else {
       return false;
     }
   }
-if(x==1&&y==-10||x==0&&y==-10||x==-1&&y==-10){
-    if(room.doors.north&&room.doors.south&&!room.doors.west){
+  if (x == 1 && y == -10 || x == 0 && y == -10 || x == -1 && y == -10) {
+    if (room.doors.north && room.doors.south && !room.doors.west) {
       return true;
-    }else{
+    } else {
       return false;
     }
   }
-  if(x==1&&y<-10){
-    if(!room.doors.west){
+  if (x == 1 && y < -10) {
+    if (!room.doors.west) {
       return true;
-    }else{
+    } else {
       return false;
     }
   }
-  if(x==-1&&y<-10){
-    if(!room.doors.east){
+  if (x == -1 && y < -10) {
+    if (!room.doors.east) {
       return true;
-    }else{
+    } else {
       return false;
     }
   }
 
+  //Any logic that cares about neighbors
+  const neighbors = [
+    { dx: 0, dy: -1, dir: 'north', opp: 'south' },
+    { dx: 0, dy: 1, dir: 'south', opp: 'north' },
+    { dx: 1, dy: 0, dir: 'east', opp: 'west' },
+    { dx: -1, dy: 0, dir: 'west', opp: 'east' },
+  ];
+
+  let has_hedge_maze = false;
+
+  for (const { dx, dy, dir, opp } of neighbors) {
+    const neighbor = world.get(getKey(x + dx, y + dy));
+    
+    if (neighbor) {
+      //Hedge Maze
+      if(neighbor.name=="Hedge Maze" || neighbor.name=="Hedge Maze Entrance"){
+        has_hedge_maze=true;
+      }
+    }
+  }
+
+  // If spawning a room adjacent to a hedge maze it better be a hedge maze
+  if(has_hedge_maze&&room.name!="Hedge Maze"&&room.name!="Hedge Maze Entrance"){
+    return false;
+  }else{
+    return true;
+  }
+
   //Rooms that shouldn't spawn on their own:
-  if(room.name=="Infinite Hall"){
+  if (room.name == "Infinite Hall") {
+    return false;
+  }
+
+  if (room.name == "Hedge Maze") {
     return false;
   }
 
   return true;
 }
 
-  
 
-  function getValidRooms(x, y, world, roomTemplates) {
-    const key = getKey(x, y);
-    // const specificConstraint = coordinateConstraints[key];
-  
-    return roomTemplates.slice(1).filter((room) => {
-      // 1. No repeat of adjacent room types
-      for (const { dx, dy } of [
-        { dx: 0, dy: -1 },
-        { dx: 0, dy: 1 },
-        { dx: 1, dy: 0 },
-        { dx: -1, dy: 0 },
-      ]) {
-        const neighbor = world.get(getKey(x + dx, y + dy));
-        if (neighbor && neighbor.filename === room.filename) {
-          return false;
-        }
-      }
-  
-      // 2. Ensure door compatibility
-      const neighbors = [
-        { dx: 0, dy: -1, dir: 'north', opp: 'south' },
-        { dx: 0, dy: 1, dir: 'south', opp: 'north' },
-        { dx: 1, dy: 0, dir: 'east', opp: 'west' },
-        { dx: -1, dy: 0, dir: 'west', opp: 'east' },
-      ];
-  
-      let unseenNeighbors = [];
-  
-      for (const { dx, dy, dir, opp } of neighbors) {
-        const neighbor = world.get(getKey(x + dx, y + dy));
-        if (neighbor) {
-          const neighborHasDoor = neighbor.doors[opp];
-          const roomHasDoor = room.doors[dir];
-  
-          if (neighborHasDoor && !roomHasDoor) return false;
-          if (!neighborHasDoor && roomHasDoor) return false;
-        } else {
-          unseenNeighbors.push({ dx, dy, dir });
-        }
-      }
-  
-      // 3. Ensure path to sole unseen neighbor
-      if (unseenNeighbors.length === 1) {
-        const only = unseenNeighbors[0];
-        if (!room.doors[only.dir]) return false;
-      }
-  
-      // 4. Enforce fixed door constraints
-      // if (specificConstraint) {
-      //   for (const dir of ['north', 'south', 'east', 'west']) {
-      //     if (room.doors[dir] !== specificConstraint[dir]) return false;
-      //   }
-      // }
 
-      // Evaluate specific constraints
-      if(specificConstraint(x,y,room)==false){
+function getValidRooms(x, y, world, roomTemplates) {
+  const key = getKey(x, y);
+
+  return roomTemplates.slice(1).filter((room) => {
+    // 1. No repeat of adjacent room types
+    for (const { dx, dy } of [
+      { dx: 0, dy: -1 },
+      { dx: 0, dy: 1 },
+      { dx: 1, dy: 0 },
+      { dx: -1, dy: 0 },
+    ]) {
+      const neighbor = world.get(getKey(x + dx, y + dy));
+      if (neighbor && neighbor.filename === room.filename) {
         return false;
       }
-  
-      // 5. Prevent creatind dead-end paths for neighbors
-      const blockingDirs = getBlockingDirectionsIfRoomPlaced(x, y, room, world);
-
-      if (blockingDirs.length > 0) {
-        for (const dir of blockingDirs) {
-          if (!room.doors[dir]) return false;
-        }
-      }
-  
-      return true;
-    }).map(room => ({ ...room }));
-  }
-  
-  function floodFill({ 
-    startX, 
-    startY, 
-    world, 
-    maxDepth = 5,
-    shouldInclude = () => true,
-    shouldContinue = () => true
-  }) {
-    const visited = new Set();
-  
-    function recurse(x, y, depth) {
-      const key = getKey(x, y);
-      const room = world.get(key);
-      if (!room || visited.has(key) || depth > maxDepth) return;
-      if (!shouldInclude(x, y, room)) return;
-  
-      visited.add(key);
-  
-      if (!shouldContinue(x, y, room, depth)) return;
-  
-      const dirs = {
-        north: [0, -1],
-        south: [0, 1],
-        east: [1, 0],
-        west: [-1, 0]
-      };
-  
-      for (const dir in dirs) {
-        if (!room.doors[dir]) continue;
-        const [dx, dy] = dirs[dir];
-        const nx = x + dx;
-        const ny = y + dy;
-        const neighbor = world.get(getKey(nx, ny));
-        const opp = { north: 'south', south: 'north', east: 'west', west: 'east' }[dir];
-        if (neighbor && neighbor.doors[opp]) {
-          recurse(nx, ny, depth + 1);
-        }
-      }
     }
-  
-    recurse(startX, startY, 0);
-    return visited;
-  }
-  
-  function getBlockingDirectionsIfRoomPlaced(x, y, room, world) {
-    const testWorld = new Map(world);
-    testWorld.set(getKey(x, y), room);
-  
-    const neighborOffsets = [
+
+    // 2. Ensure door compatibility
+    const neighbors = [
       { dx: 0, dy: -1, dir: 'north', opp: 'south' },
       { dx: 0, dy: 1, dir: 'south', opp: 'north' },
       { dx: 1, dy: 0, dir: 'east', opp: 'west' },
-      { dx: -1, dy: 0, dir: 'west', opp: 'east' }
+      { dx: -1, dy: 0, dir: 'west', opp: 'east' },
     ];
-  
-    const blockedDirs = [];
-  
-    for (const { dx, dy, dir, opp } of neighborOffsets) {
+
+    let unseenNeighbors = [];
+
+    for (const { dx, dy, dir, opp } of neighbors) {
+      const neighbor = world.get(getKey(x + dx, y + dy));
+      if (neighbor) {
+        const neighborHasDoor = neighbor.doors[opp];
+        const roomHasDoor = room.doors[dir];
+
+        if (neighborHasDoor && !roomHasDoor) return false;
+        if (!neighborHasDoor && roomHasDoor) return false;
+      } else {
+        unseenNeighbors.push({ dx, dy, dir });
+      }
+    }
+
+    // 3. Ensure path to sole unseen neighbor
+    if (unseenNeighbors.length === 1) {
+      const only = unseenNeighbors[0];
+      if (!room.doors[only.dir]) return false;
+    }
+
+
+    // 4. Evaluate specific constraints
+    if (specificConstraint(x, y, room) == false) {
+      return false;
+    }
+
+    // 5. Prevent creatind dead-end paths for neighbors
+    const blockingDirs = getBlockingDirectionsIfRoomPlaced(x, y, room, world);
+
+    if (blockingDirs.length > 0) {
+      for (const dir of blockingDirs) {
+        if (!room.doors[dir]) return false;
+      }
+    }
+
+    return true;
+  }).map(room => ({ ...room }));
+}
+
+function floodFill({
+  startX,
+  startY,
+  world,
+  maxDepth = 5,
+  shouldInclude = () => true,
+  shouldContinue = () => true
+}) {
+  const visited = new Set();
+
+  function recurse(x, y, depth) {
+    const key = getKey(x, y);
+    const room = world.get(key);
+    if (!room || visited.has(key) || depth > maxDepth) return;
+    if (!shouldInclude(x, y, room)) return;
+
+    visited.add(key);
+
+    if (!shouldContinue(x, y, room, depth)) return;
+
+    const dirs = {
+      north: [0, -1],
+      south: [0, 1],
+      east: [1, 0],
+      west: [-1, 0]
+    };
+
+    for (const dir in dirs) {
+      if (!room.doors[dir]) continue;
+      const [dx, dy] = dirs[dir];
       const nx = x + dx;
       const ny = y + dy;
       const neighbor = world.get(getKey(nx, ny));
-  
-      if (
-        neighbor &&
-        neighbor.doors[opp] &&
-        room.doors[dir]
-      ) {
-        const visited = floodFill({
-          startX: nx,
-          startY: ny,
-          world: testWorld,
-          maxDepth: 5,
-          shouldInclude: (x2, y2) => getKey(x2, y2) !== getKey(x, y),
-          shouldContinue: () => true
-        });
-  
-        if (visited.size <= 1) {
-          blockedDirs.push(dir);
-        }
+      const opp = { north: 'south', south: 'north', east: 'west', west: 'east' }[dir];
+      if (neighbor && neighbor.doors[opp]) {
+        recurse(nx, ny, depth + 1);
       }
     }
-  
-    return blockedDirs;
   }
-  
-  
+
+  recurse(startX, startY, 0);
+  return visited;
+}
+
+function getBlockingDirectionsIfRoomPlaced(x, y, room, world) {
+  const testWorld = new Map(world);
+  testWorld.set(getKey(x, y), room);
+
+  const neighborOffsets = [
+    { dx: 0, dy: -1, dir: 'north', opp: 'south' },
+    { dx: 0, dy: 1, dir: 'south', opp: 'north' },
+    { dx: 1, dy: 0, dir: 'east', opp: 'west' },
+    { dx: -1, dy: 0, dir: 'west', opp: 'east' }
+  ];
+
+  const blockedDirs = [];
+
+  for (const { dx, dy, dir, opp } of neighborOffsets) {
+    const nx = x + dx;
+    const ny = y + dy;
+    const neighbor = world.get(getKey(nx, ny));
+
+    if (
+      neighbor &&
+      neighbor.doors[opp] &&
+      room.doors[dir]
+    ) {
+      const visited = floodFill({
+        startX: nx,
+        startY: ny,
+        world: testWorld,
+        maxDepth: 5,
+        shouldInclude: (x2, y2) => getKey(x2, y2) !== getKey(x, y),
+        shouldContinue: () => true
+      });
+
+      if (visited.size <= 1) {
+        blockedDirs.push(dir);
+      }
+    }
+  }
+
+  return blockedDirs;
+}
+
+
 
 function applyRoomWeights(x, y, validRooms) {
   return validRooms.map(room => {
@@ -254,6 +279,7 @@ function weightedRandomChoice(items, rng) {
 
 function matchRoom(x, y) {
   const validRooms = getValidRooms(x, y, world, roomTemplates);
+  console.log(validRooms);
   if (validRooms.length === 0) {
     const neighbors = [
       { dx: 0, dy: -1, dir: 'north', opp: 'south' },
@@ -309,8 +335,8 @@ function generateRoom(x, y, fromDirection) {
       uid: `${baseRoom.id}-${x}-${y}`
     };
 
-    if(random()<0.05){//Lock 5% of rooms
-      baseRoom.locked=true;
+    if (random() < 0.05) {//Lock 5% of rooms
+      baseRoom.locked = true;
     }
 
 
@@ -345,14 +371,14 @@ function renderRoom() {
       let text = dir;
       let tempRoom = null;
       switch (dir) {
-        case 'north': tempRoom = world.get(getKey(currentPosition.x, currentPosition.y-1)); break;
-        case 'south': tempRoom = world.get(getKey(currentPosition.x, currentPosition.y+1)); break;
-        case 'east': tempRoom = world.get(getKey(currentPosition.x+1, currentPosition.y)); break;
-        case 'west': tempRoom = world.get(getKey(currentPosition.x-1, currentPosition.y)); break;
+        case 'north': tempRoom = world.get(getKey(currentPosition.x, currentPosition.y - 1)); break;
+        case 'south': tempRoom = world.get(getKey(currentPosition.x, currentPosition.y + 1)); break;
+        case 'east': tempRoom = world.get(getKey(currentPosition.x + 1, currentPosition.y)); break;
+        case 'west': tempRoom = world.get(getKey(currentPosition.x - 1, currentPosition.y)); break;
       }
-      
-      if(tempRoom && tempRoom.locked){
-        text+=" 🔒";
+
+      if (tempRoom && tempRoom.locked) {
+        text += " 🔒";
       }
       document.getElementById(dir).style.display = room.doors[dir] ? 'block' : 'none';
       document.getElementById(dir).innerHTML = text;
@@ -378,37 +404,37 @@ function move(dir) {
   let newY = currentPosition.y;
 
   switch (dir) {
-    case 'north': newY-=1; break;
-    case 'south': newY+=1; break;
-    case 'east': newX+=1; break;
-    case 'west': newX-=1; break;
+    case 'north': newY -= 1; break;
+    case 'south': newY += 1; break;
+    case 'east': newX += 1; break;
+    case 'west': newX -= 1; break;
   }
-  
+
   tempRoom = world.get(getKey(newX, newY))
 
-  if(!tempRoom){
+  if (!tempRoom) {
     const key = getKey(newX, newY);
     generateRoom(newX, newY, lastDirection);
     tempRoom = world.get(key);
   }
-  
-  if(tempRoom.locked){ // Room is locked, check if we have a key
+
+  if (tempRoom.locked) { // Room is locked, check if we have a key
     let hasKey = null;
     for (let i = 0; i < inventory.length; i++) {
       if (inventory[i].name == "key") {
         inventory.splice(i, 1); // remove it from inventory
-        tempRoom.locked=false;
+        tempRoom.locked = false;
         hasKey = true;
         break;
       }
     }
-    if(!hasKey){
+    if (!hasKey) {
       renderRoom();
       return;
     }
 
   }
-  
+
   //Make the actual movement
   switch (dir) {
     case 'north': currentPosition.y -= 1; break;
@@ -421,77 +447,77 @@ function move(dir) {
 
 function renderMap() {
   let size = mapSize;
-    const inventoryDiv = document.getElementById("inventory");
-    inventoryDiv.innerHTML = "";
-    inventoryDiv.innerHTML += inventory.map(function(obj){
-      if(obj.name=="key"){
-        return "🔑"
-      }
-      return "";
-    }).join("");
+  const inventoryDiv = document.getElementById("inventory");
+  inventoryDiv.innerHTML = "";
+  inventoryDiv.innerHTML += inventory.map(function (obj) {
+    if (obj.name == "key") {
+      return "🔑"
+    }
+    return "";
+  }).join("");
 
-    const mapGrid = document.getElementById('mapGrid');
-    mapGrid.innerHTML = '';
-    mapGrid.style.gridTemplateColumns = `repeat(${size * 2 + 1}, 1fr)`; // Dynamically set columns
-  
-    const cx = currentPosition.x;
-    const cy = currentPosition.y;
-  
-    for (let dy = -size; dy <= size; dy++) {
-      for (let dx = -size; dx <= size; dx++) {
-        const x = cx + dx;
-        const y = cy + dy;
-        const key = getKey(x, y);
-        const room = world.get(key);
-        const cell = document.createElement('div');
-        cell.className = 'mapCell';
-  
-        if (x === cx && y === cy) {
-          cell.classList.add('current');
-        }
-  
-        if (room) {
-          if (room.doors.north) cell.classList.add('mapCellNoNorth');
-          if (room.doors.south) cell.classList.add('mapCellNoSouth');
-          if (room.doors.east)  cell.classList.add('mapCellNoEast');
-          if (room.doors.west)  cell.classList.add('mapCellNoWest');
-          if(room.locked){
-            cell.textContent = "🔒";
-          }else{
-            cell.textContent = room.name;
-          }
-          
-        } else {
-          cell.textContent = '?';
-          cell.classList.add('mapCellNoNorth');
-          cell.classList.add('mapCellNoSouth');
-          cell.classList.add('mapCellNoEast');
-          cell.classList.add('mapCellNoWest');
-        }
-  
-        mapGrid.appendChild(cell);
+  const mapGrid = document.getElementById('mapGrid');
+  mapGrid.innerHTML = '';
+  mapGrid.style.gridTemplateColumns = `repeat(${size * 2 + 1}, 1fr)`; // Dynamically set columns
+
+  const cx = currentPosition.x;
+  const cy = currentPosition.y;
+
+  for (let dy = -size; dy <= size; dy++) {
+    for (let dx = -size; dx <= size; dx++) {
+      const x = cx + dx;
+      const y = cy + dy;
+      const key = getKey(x, y);
+      const room = world.get(key);
+      const cell = document.createElement('div');
+      cell.className = 'mapCell';
+
+      if (x === cx && y === cy) {
+        cell.classList.add('current');
       }
+
+      if (room) {
+        if (room.doors.north) cell.classList.add('mapCellNoNorth');
+        if (room.doors.south) cell.classList.add('mapCellNoSouth');
+        if (room.doors.east) cell.classList.add('mapCellNoEast');
+        if (room.doors.west) cell.classList.add('mapCellNoWest');
+        if (room.locked) {
+          cell.textContent = "🔒";
+        } else {
+          cell.textContent = room.name;
+        }
+
+      } else {
+        cell.textContent = '?';
+        cell.classList.add('mapCellNoNorth');
+        cell.classList.add('mapCellNoSouth');
+        cell.classList.add('mapCellNoEast');
+        cell.classList.add('mapCellNoWest');
+      }
+
+      mapGrid.appendChild(cell);
     }
   }
-  
-  
-  
+}
+
+
+
 
 document.getElementById('mapToggle').addEventListener('click', () => {
 
   const container = document.getElementById('mapContainer');
-  if(mapSize==0){
+  if (mapSize == 0) {
     container.style.display = 'block';
-    mapSize=2;
-  }else
-  if(mapSize==2){
-    container.style.display = 'block' ;
-    mapSize=5;
-  } 
-  else if(mapSize==5){
-    container.style.display = 'none' ;
-    mapSize=0;
-  }
+    mapSize = 2;
+  } else
+    if (mapSize == 2) {
+      container.style.display = 'block';
+      mapSize = 5;
+    }
+    else if (mapSize == 5) {
+      container.style.display = 'none';
+      mapSize = 0;
+    }
   // container.style.display = container.style.display === 'none' ? 'block' : 'none';
   renderMap();
 });
@@ -526,14 +552,14 @@ function handleRoomImageClick(xPercent, yPercent) {
   const x = currentPosition.x;
   const y = currentPosition.y;
   console.log(xPercent, yPercent);
-  
+
   const currentRoom = world.get(getKey(x, y));
   if (!currentRoom || !currentRoom.objects) return;
-  
+
   for (let i = 0; i < currentRoom.objects.length; i++) {
     const obj = currentRoom.objects[i];
     const { x, y, w, h } = obj.location;
-  
+
     if (
       xPercent >= x &&
       xPercent <= x + w &&
@@ -543,11 +569,11 @@ function handleRoomImageClick(xPercent, yPercent) {
       if (obj.fn && typeof obj.fn === 'function') {
         obj.fn();
       }
-  
+
       inventory.push(obj);
       currentRoom.objects.splice(i, 1); // Remove from room
       console.log(inventory);
-      
+
       renderRoom();
       break;
     }

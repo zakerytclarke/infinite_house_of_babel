@@ -1,4 +1,5 @@
 const roomTemplates = [
+  
   {
     "name": "Entrance",
     "filename": "front.png",
@@ -587,5 +588,105 @@ const roomTemplates = [
       "east": false,
       "west": false
     }
-  }
+  },
+  {
+    "name": "Hedge Maze Entrance",
+    "filename": "hedge_maze_right.png",
+    "doors": {
+      "north": true,
+      "south": true,
+      "east": false,
+      "west": false
+    }
+  },
+  {
+    "name": "Hedge Maze",
+    "filename": "hedge_maze_right.png",
+    "doors": {
+      "north": true,
+      "south": true,
+      "east": false,
+      "west": false
+    }
+  },
+  {
+    "name": "Hedge Maze",
+    "filename": "hedge_maze_left.png",
+    "doors": {
+      "north": false,
+      "south": false,
+      "east": true,
+      "west": true
+    }
+  },
+  {
+    "name": "Hedge Maze",
+    "filename": "hedge_maze_right.png",
+    "doors": {
+      "north": true,
+      "south": false,
+      "east": true,
+      "west": false
+    }
+  },
+  {
+    "name": "Hedge Maze",
+    "filename": "hedge_maze_left.png",
+    "doors": {
+      "north": false,
+      "south": true,
+      "east": true,
+      "west": false
+    }
+  },
+  {
+    "name": "Hedge Maze",
+    "filename": "hedge_maze.png",
+    "doors": {
+      "north": false,
+      "south": true,
+      "east": true,
+      "west": false
+    }
+  },
+  {
+    "name": "Hedge Maze",
+    "filename": "hedge_maze_left.png",
+    "doors": {
+      "north": false,
+      "south": true,
+      "east": true,
+      "west": true
+    }
+  },
+  {
+    "name": "Hedge Maze",
+    "filename": "hedge_maze_right.png",
+    "doors": {
+      "north": true,
+      "south": true,
+      "east": true,
+      "west": false
+    }
+  },
+  {
+    "name": "Hedge Maze",
+    "filename": "hedge_maze_both.png",
+    "doors": {
+      "north": true,
+      "south": true,
+      "east": true,
+      "west": true
+    }
+  },
+  {
+    "name": "Hedge Maze",
+    "filename": "hedge_maze_right.png",
+    "doors": {
+      "north": true,
+      "south": true,
+      "east": false,
+      "west": false
+    }
+  },
 ];
