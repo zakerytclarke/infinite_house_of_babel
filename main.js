@@ -13,6 +13,7 @@ function mulberry32(a) {
 
 const world = new Map();
 const inventory = [];
+const state = {};
 let mapSize = 2;
 const currentPosition = { x: 0, y: 0 };
 let lastDirection = 'north';
@@ -77,8 +78,10 @@ function specificConstraint(x, y, room) {
   // If spawning a room adjacent to a hedge maze it better be a hedge maze
   if(has_hedge_maze&&room.name!="Hedge Maze"&&room.name!="Hedge Maze Entrance"){
     return false;
-  }else{
-    return true;
+  }
+
+  if(!has_hedge_maze&&(room.name=="Hedge Maze"||room.name=="Hedge Maze Entrance")){
+    return false;
   }
 
   //Rooms that shouldn't spawn on their own:
@@ -100,17 +103,18 @@ function getValidRooms(x, y, world, roomTemplates) {
 
   return roomTemplates.slice(1).filter((room) => {
     // 1. No repeat of adjacent room types
-    for (const { dx, dy } of [
-      { dx: 0, dy: -1 },
-      { dx: 0, dy: 1 },
-      { dx: 1, dy: 0 },
-      { dx: -1, dy: 0 },
-    ]) {
-      const neighbor = world.get(getKey(x + dx, y + dy));
-      if (neighbor && neighbor.filename === room.filename) {
-        return false;
-      }
-    }
+    //TODO: re-enable later
+    // for (const { dx, dy } of [
+    //   { dx: 0, dy: -1 },
+    //   { dx: 0, dy: 1 },
+    //   { dx: 1, dy: 0 },
+    //   { dx: -1, dy: 0 },
+    // ]) {
+    //   const neighbor = world.get(getKey(x + dx, y + dy));
+    //   if (neighbor && neighbor.filename === room.filename) {
+    //     return false;
+    //   }
+    // }
 
     // 2. Ensure door compatibility
     const neighbors = [
@@ -259,7 +263,9 @@ function applyRoomWeights(x, y, validRooms) {
 
     const baseWeight = room.doors.north + room.doors.south + room.doors.east + room.doors.west;
     // const weight = baseWeight + numDoors * Math.pow(10, numDoors) + bias * 4;
-    const weight = baseWeight + numDoors * 2 + bias * 4;
+    // const weight = baseWeight + numDoors * 2 + bias * 4;
+    // const weight = baseWeight + numDoors * 0 + bias * 4;
+    const weight = 1;
     return { ...room, weight };
   }).sort((a, b) => b.weight - a.weight);
 }
@@ -335,7 +341,7 @@ function generateRoom(x, y, fromDirection) {
       uid: `${baseRoom.id}-${x}-${y}`
     };
 
-    if (random() < 0.05) {//Lock 5% of rooms
+    if (random() < 0.25) {//Lock 5% of rooms
       baseRoom.locked = true;
     }
 
@@ -389,7 +395,7 @@ function renderRoom() {
   };
   let filename = room.filename;
   if (typeof filename === 'function') {
-    filename = filename(room);
+    filename = filename(room, state);
   }
   img.src = `rooms/${filename}`;
   renderMap();
@@ -445,15 +451,39 @@ function move(dir) {
   renderRoom();
 }
 
+function handleInventoryClick(index) {
+  const item = inventory[index];
+  const room = world.get(getKey(currentPosition.x, currentPosition.y));
+
+  let result = null;
+
+  if (room.interaction) {
+    result = room.interaction(room, item);
+    if (result) {
+      // Remove the item from inventory if the interaction returns true
+      inventory.splice(index, 1);
+      
+      
+      renderRoom()
+    }
+  }
+}
+
+  
+
 function renderMap() {
   let size = mapSize;
   const inventoryDiv = document.getElementById("inventory");
   inventoryDiv.innerHTML = "";
-  inventoryDiv.innerHTML += inventory.map(function (obj) {
-    if (obj.name == "key") {
-      return "🔑"
+  inventoryDiv.innerHTML += inventory.map(function (obj, index) {
+    let text = "";
+    if (obj.name === "key") {
+      text = "🔑";
     }
-    return "";
+    if (obj.name === "top hat") {
+      text = "🎩";
+    }
+    return `<span onclick="handleInventoryClick(${index})">${text}</span>`;
   }).join("");
 
   const mapGrid = document.getElementById('mapGrid');
@@ -566,12 +596,15 @@ function handleRoomImageClick(xPercent, yPercent) {
       yPercent >= y &&
       yPercent <= y + h
     ) {
+      result = obj;
       if (obj.fn && typeof obj.fn === 'function') {
-        obj.fn();
+        result = obj.fn(state);
       }
-
-      inventory.push(obj);
-      currentRoom.objects.splice(i, 1); // Remove from room
+      if(result){
+        inventory.push(result);
+        currentRoom.objects.splice(i, 1); // Remove from room
+      }
+      
       console.log(inventory);
 
       renderRoom();
