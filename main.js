@@ -342,7 +342,8 @@ function generateRoom(x, y, fromDirection) {
     };
 
     if (random() < 0.25) {//Lock 5% of rooms
-      baseRoom.locked = true;
+      console.log(roomInstance)
+      roomInstance.locked = true;
     }
 
 
