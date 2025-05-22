@@ -341,7 +341,7 @@ function generateRoom(x, y, fromDirection) {
       uid: `${baseRoom.id}-${x}-${y}`
     };
 
-    if (random() < 0.25) {//Lock 5% of rooms
+    if (random() < 0.05) {//Lock 5% of rooms
       console.log(roomInstance)
       roomInstance.locked = true;
     }
