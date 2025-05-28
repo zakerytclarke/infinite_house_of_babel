@@ -25,34 +25,51 @@ function getKey(x, y) {
 
 function specificConstraint(x, y, room) {
   //Infinite Hallway
-  if (x == 0 && y < -10) {
+  if (x == 0 && (y == -6 || y==-7 || y==-11 || y==-29 || y==-125 || y==-725 || y==-5045)) {
+    if (room.name == "Infinite Hall Locked") {
+      return true;
+    } else {
+      return false;
+    }
+  }
+  if (x == 0 && y < -5) {
     if (room.doors.north && room.doors.south && !room.doors.east && !room.doors.west && room.name == "Infinite Hall") {
       return true;
     } else {
       return false;
     }
   }
-  if (x == 1 && y == -10 || x == 0 && y == -10 || x == -1 && y == -10) {
+  if (x == 1 && y == -5 || x == 0 && y == -5 || x == -1 && y == -5) {
     if (room.doors.north && room.doors.south && !room.doors.west) {
       return true;
     } else {
       return false;
     }
   }
-  if (x == 1 && y < -10) {
+  if (x == 1 && y < -5) {
     if (!room.doors.west) {
       return true;
     } else {
       return false;
     }
   }
-  if (x == -1 && y < -10) {
+  if (x == -1 && y < -5) {
     if (!room.doors.east) {
       return true;
     } else {
       return false;
     }
   }
+
+  // Infinite Library
+  if (x <-5 && y >-2 && y < 2) {
+    if (room.name == "Infinite Library") {
+      return true;
+    } else {
+      return false;
+    }
+  }
+
 
   //Any logic that cares about neighbors
   const neighbors = [
@@ -89,6 +106,14 @@ function specificConstraint(x, y, room) {
     return false;
   }
 
+  if (room.name == "Infinite Hall Locked") {
+    return false;
+  }
+
+  if (room.name == "Infinite Library") {
+    return false;
+  }
+
   if (room.name == "Hedge Maze") {
     return false;
   }
@@ -102,21 +127,7 @@ function getValidRooms(x, y, world, roomTemplates) {
   const key = getKey(x, y);
 
   return roomTemplates.slice(1).filter((room) => {
-    // 1. No repeat of adjacent room types
-    //TODO: re-enable later
-    // for (const { dx, dy } of [
-    //   { dx: 0, dy: -1 },
-    //   { dx: 0, dy: 1 },
-    //   { dx: 1, dy: 0 },
-    //   { dx: -1, dy: 0 },
-    // ]) {
-    //   const neighbor = world.get(getKey(x + dx, y + dy));
-    //   if (neighbor && neighbor.filename === room.filename) {
-    //     return false;
-    //   }
-    // }
-
-    // 2. Ensure door compatibility
+    // 1. Door compatibility with neighbors
     const neighbors = [
       { dx: 0, dy: -1, dir: 'north', opp: 'south' },
       { dx: 0, dy: 1, dir: 'south', opp: 'north' },
@@ -131,7 +142,6 @@ function getValidRooms(x, y, world, roomTemplates) {
       if (neighbor) {
         const neighborHasDoor = neighbor.doors[opp];
         const roomHasDoor = room.doors[dir];
-
         if (neighborHasDoor && !roomHasDoor) return false;
         if (!neighborHasDoor && roomHasDoor) return false;
       } else {
@@ -139,30 +149,66 @@ function getValidRooms(x, y, world, roomTemplates) {
       }
     }
 
-    // 3. Ensure path to sole unseen neighbor
+    // 2. Prevent single-door dead ends
     if (unseenNeighbors.length === 1) {
       const only = unseenNeighbors[0];
       if (!room.doors[only.dir]) return false;
     }
 
+    // 3. Custom external constraints
+    if (specificConstraint(x, y, room) === false) return false;
 
-    // 4. Evaluate specific constraints
-    if (specificConstraint(x, y, room) == false) {
-      return false;
-    }
+    // 4. Simulate room placement and run flood fill to detect isolation/inaccessibility
+    const simulatedWorld = new Map(world);
+    simulatedWorld.set(key, { ...room, x, y });
 
-    // 5. Prevent creatind dead-end paths for neighbors
-    const blockingDirs = getBlockingDirectionsIfRoomPlaced(x, y, room, world);
-
-    if (blockingDirs.length > 0) {
-      for (const dir of blockingDirs) {
-        if (!room.doors[dir]) return false;
-      }
-    }
+    if (!floodFillCheck(simulatedWorld, x, y)) return false;
 
     return true;
   }).map(room => ({ ...room }));
 }
+
+function floodFillCheck(world, startX, startY, maxDepth = 20) {
+  const visited = new Set();
+  const frontier = [{ x: startX, y: startY, depth: 0 }];
+
+  while (frontier.length > 0) {
+    const { x, y, depth } = frontier.pop();
+    const k = getKey(x, y);
+    if (visited.has(k) || depth > maxDepth) continue;
+    visited.add(k);
+
+    const room = world.get(k);
+    if (!room) continue;
+
+    const directions = [
+      { dx: 0, dy: -1, dir: 'north', opp: 'south' },
+      { dx: 0, dy: 1, dir: 'south', opp: 'north' },
+      { dx: 1, dy: 0, dir: 'east', opp: 'west' },
+      { dx: -1, dy: 0, dir: 'west', opp: 'east' },
+    ];
+
+    for (const { dx, dy, dir, opp } of directions) {
+      if (!room.doors[dir]) continue;
+      const nx = x + dx;
+      const ny = y + dy;
+      const neighbor = world.get(getKey(nx, ny));
+
+      if (!neighbor) {
+        // Found a way out — the area is not enclosed
+        return true;
+      }
+
+      if (neighbor.doors[opp]) {
+        frontier.push({ x: nx, y: ny, depth: depth + 1 });
+      }
+    }
+  }
+
+  // No escape found — it's a trapped area
+  return false;
+}
+
 
 function floodFill({
   startX,
@@ -251,7 +297,7 @@ function getBlockingDirectionsIfRoomPlaced(x, y, room, world) {
 
 
 
-function applyRoomWeights(x, y, validRooms) {
+function applyRoomWeights(x, y, validRooms, world) {
   return validRooms.map(room => {
     const numDoors = Object.values(room.doors).filter(Boolean).length;
 
@@ -263,9 +309,9 @@ function applyRoomWeights(x, y, validRooms) {
 
     const baseWeight = room.doors.north + room.doors.south + room.doors.east + room.doors.west;
     // const weight = baseWeight + numDoors * Math.pow(10, numDoors) + bias * 4;
-    // const weight = baseWeight + numDoors * 2 + bias * 4;
+    const weight = baseWeight + numDoors * 2 + bias * 4;
     // const weight = baseWeight + numDoors * 0 + bias * 4;
-    const weight = 1;
+    // const weight = 1;
     return { ...room, weight };
   }).sort((a, b) => b.weight - a.weight);
 }
@@ -303,7 +349,7 @@ function matchRoom(x, y) {
     return null;
   }
 
-  const weightedRooms = applyRoomWeights(x, y, validRooms);
+  const weightedRooms = applyRoomWeights(x, y, validRooms, world);
   return weightedRandomChoice(weightedRooms, random);
 }
 
@@ -341,7 +387,7 @@ function generateRoom(x, y, fromDirection) {
       uid: `${baseRoom.id}-${x}-${y}`
     };
 
-    if (random() < 0.05) {//Lock 5% of rooms
+    if (random() < 0.05 && baseRoom.name!="Infinite Hall") {//Lock 5% of rooms
       console.log(roomInstance)
       roomInstance.locked = true;
     }
